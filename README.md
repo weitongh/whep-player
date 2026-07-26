@@ -1,38 +1,21 @@
 # Screenshare Web Client
 
-A real-time screen sharing web application built with Agora SDK for personal use with friends.
+A real-time screen sharing web app (React + mediasoup) for hosting watch
+parties with friends. Runs against my self-hosted mediasoup server; not
+intended for general deployment.
 
-## Prerequisites
+## Commands
 
-- Node.js/npm
-- An Agora account with an App ID
-- A WebSocket server for signaling (see [screenshare-websocket-server](https://github.com/weitongh/screenshare-websocket-server))
+- `npm install` — install dependencies
+- `npm run dev` — start the dev server
+- `npm run build` — production build
+- `npm run deploy` — deploy to Cloudflare Workers
 
-## Setup
+## Environment
 
-1. Install dependencies
-```bash
-npm install
-```
-2. Create a `.env` file at the project root:
+The mediasoup server URL is read from `VITE_SERVER_URL`. Create a `.env` file
+at the project root. Update it to point at a different server:
+
 ```env
-VITE_AGORA_APP_ID=<agora-app-id>
-VITE_WS_URL=<websocket-server-url>
-VITE_DEFAULT_ROOM_ID=<default-room-id>
-VITE_CHANNEL=<channel-name>
-```
-
-## Usage
-
-Start the development server:
-```bash
-npm run dev
-```
-Build for production:
-```bash
-npm run build
-```
-Deploy to Cloudflare Workers:
-```bash
-npm run deploy
+VITE_SERVER_URL=<mediasoup-server-url>
 ```
