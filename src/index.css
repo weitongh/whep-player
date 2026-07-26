@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-foreground: oklab(0.9 0 0);
+  --color-background: oklab(0.18 0 0);
+  --color-focus: oklab(0.67 -0.04 -0.14);
+  --color-muted: oklab(0.75 0 -0.01);
+  --color-tooltip-background: oklab(0.25 0 -0.01);
+
+  --background-image-fade-overlay: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0) 7%,
+    rgba(0, 0, 0, 0) 88%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-focus;
+  }
+
+  #root {
+    @apply flex h-screen w-full flex-col;
+  }
+}
+
+@layer components {
+  /* Shared control button used by volume/pictureInPicture/fullscreen. */
+  .control-btn {
+    @apply relative cursor-pointer rounded-lg p-2
+      transition-[background] duration-100 ease-linear;
+  }
+
+  .control-btn .icon {
+    @apply h-6 w-6;
+  }
+
+  .control-btn .tooltip {
+    @apply invisible absolute bottom-[125%] left-1/2 z-10 w-max
+      -translate-x-1/2 whitespace-nowrap rounded-lg bg-tooltip-background px-3 py-2
+      text-center text-sm text-foreground shadow-[0_0_0_1px_rgba(151,151,159,0.4)];
+  }
+
+  .control-btn .tooltip::after {
+    content: "";
+    @apply absolute left-1/2 top-full -translate-x-1/2 border-[7px]
+      border-solid border-tooltip-background;
+    border-color: var(--color-tooltip-background) transparent transparent transparent;
+  }
+
+  /* Fullscreen tooltip is shifted left to avoid the viewport edge, so nudge
+     its arrow right to keep it pointing at the button. */
+  .control-btn .tooltip.tooltip-shift-left::after {
+    @apply left-[75%];
+  }
+
+  .control-btn:hover .tooltip {
+    @apply visible;
+  }
+
+  /* Volume slider: pin track/thumb color so it doesn't shift on hover. */
+  .volume-slider {
+    @apply cursor-pointer appearance-none bg-transparent;
+  }
+
+  .volume-slider::-webkit-slider-runnable-track {
+    @apply h-1 rounded-full;
+    background: linear-gradient(
+      to right,
+      var(--color-foreground) var(--volume-fill, 0%),
+      color-mix(in oklab, var(--color-foreground) 25%, transparent)
+        var(--volume-fill, 0%)
+    );
+  }
+
+  .volume-slider::-moz-range-track {
+    @apply h-1 rounded-full;
+    background: linear-gradient(
+      to right,
+      var(--color-foreground) var(--volume-fill, 0%),
+      color-mix(in oklab, var(--color-foreground) 25%, transparent)
+        var(--volume-fill, 0%)
+    );
+  }
+
+  .volume-slider::-webkit-slider-thumb {
+    @apply mt-[-4px] h-3 w-3 appearance-none rounded-full bg-foreground;
+  }
+
+  .volume-slider::-moz-range-thumb {
+    @apply h-3 w-3 rounded-full border-0 bg-foreground;
+  }
+}
