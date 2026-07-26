@@ -44,10 +44,16 @@ export class Mediasoup {
   private consumers: Map<string, Consumer>;
   private status: Status;
   private listeners: { [E in keyof EventMap]: Set<Listener<E>> };
+  // Incremented on every connect()/disconnect(). Async work captures the
+  // generation it started in and bails if it no longer matches, so an
+  // in-flight connect chain cannot mutate a torn-down instance (e.g. under
+  // React StrictMode's mount -> unmount -> mount cycle).
+  private generation: number;
 
   constructor() {
     this.consumers = new Map();
     this.status = "idle";
+    this.generation = 0;
     this.listeners = {
       stream: new Set(),
       statusChange: new Set(),
@@ -56,6 +62,8 @@ export class Mediasoup {
 
   async connect(url: string): Promise<void> {
     if (this.socket) return;
+
+    const generation = ++this.generation;
 
     this.setStatus("loading");
 
@@ -71,6 +79,8 @@ export class Mediasoup {
 
     this.socket.on("connect", async () => {
       try {
+        if (!this.isCurrent(generation)) return;
+
         if (!this.device) {
           this.device = new Device();
         }
@@ -80,17 +90,21 @@ export class Mediasoup {
           this.clientId
         );
 
+        if (!this.isCurrent(generation)) return;
+
         if (ack.status === "ok") {
           if (!this.device.loaded) {
             const routerRtpCapabilities = ack.data.rtpCapabilities;
             await this.device.load({ routerRtpCapabilities });
+            if (!this.isCurrent(generation)) return;
           }
 
-          this.subscribe(ack.data.producerIds);
+          await this.subscribe(generation, ack.data.producerIds);
         } else {
           throw new Error(ack.error);
         }
       } catch (err) {
+        if (!this.isCurrent(generation)) return;
         console.error(err);
         this.setStatus("error");
       }
@@ -109,6 +123,9 @@ export class Mediasoup {
   }
 
   disconnect(): void {
+    // Invalidate any in-flight async work from the active generation.
+    this.generation++;
+
     this.transport?.close();
     this.transport = undefined;
 
@@ -141,18 +158,29 @@ export class Mediasoup {
     this.emit("statusChange", status);
   }
 
-  private async subscribe(producerIds?: string[]): Promise<void> {
+  // True if the given generation is still the active one.
+  private isCurrent(generation: number): boolean {
+    return this.generation === generation;
+  }
+
+  private async subscribe(
+    generation: number,
+    producerIds?: string[]
+  ): Promise<void> {
     await this.createRecvTransport();
+    if (!this.isCurrent(generation)) return;
+
     const stream = this.createStreamSink();
 
     if (this.consumers.size === 0 && producerIds) {
       for (const producerId of producerIds) {
-        await this.consume(stream, producerId);
+        await this.consume(generation, stream, producerId);
+        if (!this.isCurrent(generation)) return;
       }
     }
 
     this.socket!.on("newproducer", async ({ producerId }) => {
-      await this.consume(stream, producerId);
+      await this.consume(generation, stream, producerId);
     });
 
     this.socket!.on("consumerclose", ({ consumerId }) => {
@@ -205,10 +233,18 @@ export class Mediasoup {
   }
 
   private async consume(
+    generation: number,
     stream: MediaStream,
     producerId: string
   ): Promise<void> {
     const consumer = await this.createConsumer(producerId);
+
+    // Instance was torn down while the consumer was being created: discard it
+    // instead of attaching to a stale stream.
+    if (!this.isCurrent(generation)) {
+      consumer.close();
+      return;
+    }
 
     stream.addTrack(consumer.track);
     this.setStatus("live");
@@ -225,6 +261,8 @@ export class Mediasoup {
       "consumerresume",
       consumer.id
     );
+
+    if (!this.isCurrent(generation)) return;
 
     if (ack.status === "error") {
       stream.removeTrack(consumer.track);
