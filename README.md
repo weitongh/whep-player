@@ -1,8 +1,7 @@
 # Screenshare Web Client
 
-A real-time screen sharing web app (React + mediasoup) for hosting watch
-parties with friends. Runs against my self-hosted mediasoup server; not
-intended for general deployment.
+A real-time screen sharing web app for hosting watch parties with friends. Runs
+against my self-hosted mediasoup server; not intended for general deployment.
 
 ## Commands
 
