@@ -37,7 +37,6 @@ type JoinData = { rtpCapabilities: RtpCapabilities; producerIds: string[] };
 
 export class Mediasoup {
   private socket?: Socket;
-  private clientId?: string;
   private device?: Device;
   private transport?: Transport;
   private stream?: MediaStream;
@@ -67,14 +66,8 @@ export class Mediasoup {
 
     this.setStatus("loading");
 
-    const generateRandomId = (length = 8) => {
-      return Math.random().toString(36).substring(2, 2 + length);
-    };
-
-    this.clientId = generateRandomId();
-
     this.socket = io(url, {
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 3,
     });
 
     this.socket.on("connect", async () => {
@@ -85,10 +78,7 @@ export class Mediasoup {
           this.device = new Device();
         }
 
-        const ack: Ack<JoinData> = await this.socket!.emitWithAck(
-          "join",
-          this.clientId
-        );
+        const ack: Ack<JoinData> = await this.socket!.emitWithAck("join");
 
         if (!this.isCurrent(generation)) return;
 
@@ -134,7 +124,6 @@ export class Mediasoup {
     this.socket = undefined;
 
     this.device = undefined;
-    this.clientId = undefined;
     this.consumers.clear();
 
     this.setStatus("idle");
