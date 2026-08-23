@@ -9,23 +9,16 @@ export function StreamProvider({ children }) {
 
   useEffect(() => {
     const client = new Mediasoup();
-    const clearStreamEventListeners = client.on("stream", (stream) => {
-      setStream(stream);
-    });
-    const clearStatusEventListeners = client.on("statusChange", (status) => {
-      setStatus(status);
-    });
+    client.on("stream", setStream);
+    client.on("statusChange", setStatus);
 
     client.connect(import.meta.env.VITE_SERVER_URL);
 
     return () => {
-      clearStreamEventListeners();
-      clearStatusEventListeners();
+      client.off("stream", setStream);
+      client.off("statusChange", setStatus);
 
       client.disconnect();
-
-      setStream(null);
-      setStatus("idle");
     };
   }, []);
 

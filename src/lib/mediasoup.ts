@@ -16,7 +16,12 @@ import type { Socket } from "socket.io-client";
 // The "statusChange" event fires on every transition and carries the new
 // status as its payload.
 // Subscribe with on(event, fn) BEFORE calling connect(url); the stream object
-// is emitted once and mutated in place as tracks come and go.
+// is emitted once and mutated in place as tracks come and go. Detach with
+// off(event, fn), passing the same function reference.
+// disconnect() tears down the connection only and leaves listeners attached, so
+// an instance can be reconnected with connect(url). Callers own their
+// subscriptions: every on() needs a matching off(), or the listener and its
+// captured scope stay alive for the life of the instance.
 
 export type Status = "idle" | "loading" | "live" | "error";
 
@@ -26,8 +31,6 @@ type EventMap = {
 };
 
 type Listener<E extends keyof EventMap> = (payload: EventMap[E]) => void;
-
-type Unsubscribe = () => void;
 
 type Ack<T> =
   | { status: "ok"; data: T }
@@ -127,12 +130,18 @@ export class Mediasoup {
     this.consumers.clear();
 
     this.setStatus("idle");
-    for (const set of Object.values(this.listeners)) set.clear();
   }
 
-  on<E extends keyof EventMap>(event: E, fn: Listener<E>): Unsubscribe {
+  // Registers a listener. Detach with off(event, fn), passing the same
+  // reference.
+  on<E extends keyof EventMap>(event: E, fn: Listener<E>): void {
     this.listeners[event].add(fn);
-    return () => this.listeners[event].delete(fn);
+  }
+
+  // Removes a previously registered listener. The fn must be the same reference
+  // that was passed to on(); unknown listeners are ignored.
+  off<E extends keyof EventMap>(event: E, fn: Listener<E>): void {
+    this.listeners[event].delete(fn);
   }
 
   private emit<E extends keyof EventMap>(event: E, payload: EventMap[E]): void {
