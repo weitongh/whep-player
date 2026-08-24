@@ -11,16 +11,16 @@ export default function VideoContainer() {
     if (!video) return;
 
     if (status === "live") {
-      // Attach the stream and resume playback whenever a session goes live. The
-      // service reuses the same MediaStream object across sessions, so a user
-      // pause from a previous stream would otherwise persist on the reused
-      // <video> element and leave the video paused (and the controls desynced).
+      // Attach the session's stream and start playback explicitly: attaching a
+      // source pauses the element, and its autoplay flag is spent once it has
+      // played, so every session after the first would sit paused (with the
+      // controls desynced) without this.
       video.srcObject = stream;
       video.play().catch(() => {});
     } else {
-      // When the session ends the service removes the tracks but keeps the same
-      // MediaStream attached, so the element freezes on its last decoded frame.
-      // Detach the source to clear that stale frame back to a blank element.
+      // The session is over and its stream is stopped, but the element holds on
+      // to its last decoded frame. Detach the source to clear that stale frame
+      // back to a blank element.
       video.srcObject = null;
     }
   }, [status, stream, videoRef]);

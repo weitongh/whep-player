@@ -1,20 +1,40 @@
-# Screenshare Web Client
+# WHEP Player
 
-A real-time screen sharing web app for hosting watch parties with friends. Runs
-against my self-hosted mediasoup server; not intended for general deployment.
+A browser video player that plays a live stream from a WHEP (WebRTC-HTTP Egress
+Protocol) endpoint. I built it to host watch parties with friends, so the UI is
+tailored to my own preferences.
 
-## Commands
+To try it, point the player at your own WHEP endpoint:
 
-- `npm install` — install dependencies
-- `npm run dev` — start the dev server
-- `npm run build` — production build
-- `npm run deploy` — deploy to Cloudflare Workers
+```sh
+npm install
+VITE_WHEP_ENDPOINT_URL=<whep-endpoint-url> npm run dev
+```
 
-## Environment
+## WHEP client (`src/lib/whep.ts`)
 
-The mediasoup server URL is read from `VITE_SERVER_URL`. Create a `.env` file
-at the project root. Update it to point at a different server:
+The player core is designed to be client-agnostic: no dependencies, no DOM, no
+framework. It implements the mandatory parts of
+[draft-ietf-wish-whep-04](https://www.ietf.org/archive/id/draft-ietf-wish-whep-04.html).
+You can drop it into any client code, example:
 
-```env
-VITE_SERVER_URL=<mediasoup-server-url>
+```ts
+import { Whep } from "./lib/whep";
+
+const video = document.querySelector("video")!;
+const client = new Whep();
+
+// Attach the listeners before calling client.connect().
+client.on("stream", (stream) => {
+  video.srcObject = stream;
+});
+
+client.on("statusChange", (status) => {
+  console.log(status); // "idle" | "connecting" | "live" | "error"
+});
+
+client.connect("<whep-endpoint-url>");
+
+// Later, to end the session:
+// client.disconnect();
 ```

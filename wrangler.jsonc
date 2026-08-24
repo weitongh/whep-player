@@ -1,5 +1,5 @@
 {
-  "name": "screenshare-web-client",
+  "name": "whep-player",
   "compatibility_date": "2026-07-26",
   "assets": {
     "directory": "./dist",
