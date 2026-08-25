@@ -2,7 +2,7 @@
 
 A browser video player that plays a live stream from a WHEP (WebRTC-HTTP Egress
 Protocol) endpoint. I built it to host watch parties with friends, so its UI
-and behavior is tailored to my own preferences.
+and behavior are tailored to my own preferences.
 
 To try it, point the player at your own WHEP endpoint:
 
