@@ -23,15 +23,14 @@
 //       description, then PATCH the SDP answer ("application/sdp") to the WHEP
 //       session URL from the Location header and expect "204 No Content".
 //   2c. "409 Conflict" + "Retry-After" -> nothing is being published yet; wait
-//       out that period and POST again with exponential backoff (spec section
-//       4.3.9). A conflict without a usable "Retry-After" is treated as a
-//       plain error.
+//       out exactly that period and POST again, for as long as it takes (spec
+//       section 4.3.9).
 //   3. DELETE the WHEP session URL to terminate.
 // Trickle ICE and ICE restarts (both only RECOMMENDED) are not implemented:
 // the offer/answer is sent after ICE gathering completes instead.
 
 // "connecting" spans the whole setup phase: the offer/answer exchange, any
-// "409 Conflict" backoff waits, and the ICE/DTLS handshake. "live" means the
+// "409 Conflict" retry waits, and the ICE/DTLS handshake. "live" means the
 // transport is up, which is not quite the same as frames being on screen: the
 // first media packet can still be a moment away.
 export type Status = "idle" | "connecting" | "live" | "error";
@@ -47,13 +46,7 @@ const SDP_MIME = "application/sdp";
 // Upper bound for ICE gathering before the local description is sent anyway;
 // the candidates gathered so far are usually enough to connect.
 const ICE_GATHERING_TIMEOUT = 3000;
-// Backoff bounds for the "409 Conflict" retry loop (spec section 4.3.9). The
-// initial period comes from the "Retry-After" header, which is also what
-// authorizes the retry in the first place: a conflict without a usable one is
-// an error, not a wait. The floor keeps a "Retry-After: 0" (or a doubling that
-// starts at zero) from turning into a hot request loop.
 const MIN_RETRY_DELAY = 1000;
-const MAX_RETRY_DELAY = 30000;
 
 export class Whep {
   private pc?: RTCPeerConnection;
@@ -67,9 +60,6 @@ export class Whep {
   // generation it started in and bails if it no longer matches, so an
   // in-flight connect chain cannot mutate a torn-down instance.
   private generation: number;
-  // Resolves the pending "409 Conflict" backoff sleep early, set only while
-  // the retry loop is waiting. There is at most one in-flight connect chain
-  // (connect() bails when a peer connection exists), so one handle suffices.
   private cancelWait?: () => void;
 
   constructor() {
@@ -272,26 +262,12 @@ export class Whep {
     );
   }
 
-  // POSTs the SDP offer to the WHEP endpoint, absorbing the "409 Conflict"
-  // backpressure of an endpoint that requires a live publisher before it hands
-  // out a session (spec section 4.3.9): wait out the "Retry-After" period, then
-  // POST again, doubling the period on every further conflict.
-  // The offer is re-sent verbatim: the peer connection stays open between
-  // attempts, so it keeps its sockets and the gathered candidates in the offer
-  // remain valid.
-  // Retrying is the endpoint's call: only a conflict that carries a usable
-  // "Retry-After" starts the loop. Once started the retries are unbounded on
-  // purpose, since a player is expected to sit and wait for the broadcast to
-  // begin; disconnect() is what stops the loop.
-  // Returns undefined when the attempt was abandoned (generation changed).
   private async postOffer(
     generation: number,
     url: string,
     offer: string
   ): Promise<Response | undefined> {
-    let delay: number | undefined;
-
-    for (;;) {
+    while (true) {
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": SDP_MIME },
@@ -299,64 +275,41 @@ export class Whep {
       });
 
       if (this.isStale(generation)) return undefined;
+
       if (response.status !== 409) return response;
 
-      // The first conflict seeds the backoff from its "Retry-After"; every
-      // later one just doubles the previous period, as the spec only defines
-      // the header as the initial value.
-      if (delay === undefined) {
-        // Only back off when the endpoint said when to come back. Without a
-        // usable "Retry-After" there is no period to wait out, and inventing
-        // one is guesswork, so the conflict is surfaced as a plain error.
-        const retryAfter = this.parseRetryAfter(response);
+      const retryAfter = this.parseRetryAfter(response);
 
-        if (retryAfter === undefined) {
-          throw new Error(
-            "WHEP POST failed: 409 Conflict without a usable 'Retry-After' " +
-              "header. If the endpoint is cross-origin, it must send " +
-              "'Access-Control-Expose-Headers: Retry-After'."
-          );
-        }
-
-        delay = retryAfter;
-      } else {
-        delay = this.clampRetryDelay(delay * 2);
+      if (retryAfter === undefined) {
+        throw new Error(
+          "WHEP POST failed: 409 Conflict without a usable 'Retry-After' " +
+            "header. If the endpoint is cross-origin, it must send " +
+            "'Access-Control-Expose-Headers: Retry-After'."
+        );
       }
 
-      await this.wait(delay);
+      await this.wait(Math.max(retryAfter, MIN_RETRY_DELAY));
+
       if (this.isStale(generation)) return undefined;
     }
   }
 
-  // Reads the initial backoff period from the "Retry-After" header. WHEP
-  // mandates the delay-seconds form, but the HTTP-date form is accepted too
-  // (RFC 9110 section 10.2.3); anything missing or unparseable yields
-  // undefined, i.e. no period to wait out and so no retry.
-  // Note that "Retry-After" is not a CORS-safelisted response header either,
-  // so a cross-origin endpoint has to expose it via
-  // "Access-Control-Expose-Headers: Retry-After" or the retry is not attempted
-  // at all.
   private parseRetryAfter(response: Response): number | undefined {
     const header = response.headers.get("Retry-After")?.trim();
 
     if (!header) return undefined;
 
     const seconds = Number(header);
-    if (Number.isFinite(seconds)) return this.clampRetryDelay(seconds * 1000);
+
+    if (Number.isFinite(seconds)) return seconds * 1000;
 
     const date = Date.parse(header);
-    if (!Number.isNaN(date)) return this.clampRetryDelay(date - Date.now());
+
+    if (!Number.isNaN(date)) return date - Date.now();
 
     return undefined;
   }
 
-  private clampRetryDelay(ms: number): number {
-    return Math.min(Math.max(ms, MIN_RETRY_DELAY), MAX_RETRY_DELAY);
-  }
-
-  // Sleep for the retry loop. endSession() resolves it early so a disconnect()
-  // during a backoff period is not stalled until the timer fires; the caller
-  // then sees the generation change and bails.
   private wait(ms: number): Promise<void> {
     return new Promise((resolve) => {
       const done = () => {
@@ -441,8 +394,6 @@ export class Whep {
       this.sessionUrl = undefined;
     }
 
-    // Unblock a pending "409 Conflict" backoff so the retry loop can see that
-    // its session is gone and stop instead of firing another POST.
     this.cancelWait?.();
 
     this.pc?.close();
