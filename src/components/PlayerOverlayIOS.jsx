@@ -1,40 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useStreamContext } from "../context/streamContext";
 import { useVideoRefs } from "../context/videoRefsContext";
+import PlayerOverlay from "./PlayerOverlay";
 
-export default function PlayButtonIOS() {
+export default function PlayerOverlayIOS() {
   const { stream, status } = useStreamContext();
   const { videoRef } = useVideoRefs();
 
   // Hidden while the video is playing in native fullscreen; otherwise the
-  // button's visibility is derived from whether a live stream exists.
+  // overlay's visibility is derived from whether a live stream exists.
   const [nativeFullscreenActive, setNativeFullscreenActive] = useState(false);
   // Interval that syncs audio while in native iOS fullscreen.
   const pollRef = useRef(null);
 
-  const visible = status === "live" && !!stream && !nativeFullscreenActive;
-
-  // Start each live session paused on the first frame (browsers block audio
-  // until a user gesture, so keep video/audio consistent).
+  // Keep the audio track off until the video is handed to native fullscreen.
+  // VideoContainer already pauses the session on its first frame, but it only
+  // mutes the element, and iOS needs the track itself silenced as well.
   useEffect(() => {
     if (status !== "live" || !stream) return;
 
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onFirstFrame = () => {
-      video.ontimeupdate = null;
-      video.pause();
-      const audio = stream.getAudioTracks()[0] ?? null;
-      if (audio) audio.enabled = false;
-    };
-
-    video.ontimeupdate = onFirstFrame;
-
-    return () => {
-      video.ontimeupdate = null;
-    };
-  }, [videoRef, stream, status]);
+    const audio = stream.getAudioTracks()[0] ?? null;
+    if (audio) audio.enabled = false;
+  }, [stream, status]);
 
   // Clear the native-fullscreen audio poll on unmount.
   useEffect(() => {
@@ -50,6 +37,17 @@ export default function PlayButtonIOS() {
     const video = videoRef.current;
     if (!video?.webkitEnterFullscreen) return;
 
+    // Cancel the pending preview pause first. Otherwise a `timeupdate` landing
+    // right after this tap would pause the video on its way into fullscreen.
+    video.ontimeupdate = null;
+
+    const audio = stream?.getAudioTracks()[0] ?? null;
+    if (audio) audio.enabled = true;
+
+    // Undo the preview mute from inside the tap handler, without awaiting
+    // anything in between: Safari only treats playback with sound as permitted
+    // when it originates from the gesture itself.
+    video.muted = false;
     video.play();
     video.webkitEnterFullscreen();
     setNativeFullscreenActive(true);
@@ -60,28 +58,20 @@ export default function PlayButtonIOS() {
     // triggering any JS events, so poll and sync the audio track state until
     // fullscreen mode exits.
     pollRef.current = setInterval(() => {
-      const audio = stream?.getAudioTracks()[0] ?? null;
+      const track = stream?.getAudioTracks()[0] ?? null;
       if (video.webkitDisplayingFullscreen) {
-        if (audio) audio.enabled = !video.paused;
+        if (track) track.enabled = !video.paused;
       } else {
         clearInterval(pollRef.current);
         pollRef.current = null;
-        if (audio) audio.enabled = false;
+        if (track) track.enabled = false;
         setNativeFullscreenActive(false);
       }
     }, 300);
   };
 
-  return (
-    <div
-      className={`absolute left-1/2 top-1/2 z-2 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/50 ${
-        visible ? "" : "hidden"
-      }`}
-      onClick={enterFullscreen}
-    >
-      <svg className="h-12 w-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M4.5 3.9c0-1.35 1.4-2.24 2.61-1.66l14.13 6.6a1.85 1.85 0 0 1 0 3.32L7.11 21.76A1.85 1.85 0 0 1 4.5 20.1V3.9Z" />
-      </svg>
-    </div>
-  );
+  // Native fullscreen draws its own UI over everything.
+  if (nativeFullscreenActive) return null;
+
+  return <PlayerOverlay onStartPlayback={enterFullscreen} />;
 }
