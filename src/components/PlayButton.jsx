@@ -3,7 +3,7 @@ import { useStreamContext } from "../context/streamContext";
 import { useVideoRefs } from "../context/videoRefsContext";
 
 export default function PlayButton() {
-  const { stream, status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { videoRef } = useVideoRefs();
 
   const [playing, setPlaying] = useState(false);
@@ -30,7 +30,7 @@ export default function PlayButton() {
       video.removeEventListener("playing", syncPlayState);
       video.removeEventListener("emptied", syncPlayState);
     };
-  }, [videoRef, stream, status]);
+  }, [videoRef, stream]);
 
   const togglePlay = () => {
     const video = videoRef.current;

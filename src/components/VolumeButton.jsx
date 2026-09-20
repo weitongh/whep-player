@@ -3,7 +3,7 @@ import { useStreamContext } from "../context/streamContext";
 import { useVideoRefs } from "../context/videoRefsContext";
 
 export default function VolumeButton() {
-  const { stream, status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { videoRef } = useVideoRefs();
 
   const [volume, setVolumeState] = useState(0);
@@ -30,7 +30,7 @@ export default function VolumeButton() {
     return () => {
       video.removeEventListener("volumechange", syncVolume);
     };
-  }, [videoRef, stream, status]);
+  }, [videoRef, stream]);
 
   const setVolume = (value) => {
     const video = videoRef.current;

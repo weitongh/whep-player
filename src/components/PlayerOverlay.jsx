@@ -4,9 +4,9 @@ import { useStreamContext } from "../context/streamContext";
 // nothing to play, otherwise a tap target that runs `onStartPlayback`. The whole
 // player area is clickable; the badge is just what the viewer aims at.
 export default function PlayerOverlay({ onStartPlayback }) {
-  const { stream, status } = useStreamContext();
+  const { stream } = useStreamContext();
 
-  const waiting = status !== "live" || !stream;
+  const waiting = !stream;
 
   return (
     <div

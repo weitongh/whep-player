@@ -7,7 +7,6 @@ const RECONNECT_DELAY = 5000;
 // Broadcasts streaming state to all consumers.
 export function StreamProvider({ children }) {
   const [stream, setStream] = useState(null);
-  const [status, setStatus] = useState("idle");
 
   useEffect(() => {
     const client = new Whep();
@@ -26,40 +25,43 @@ export function StreamProvider({ children }) {
       delay = RECONNECT_DELAY;
     };
 
-    const onStatusChange = (status) => {
-      setStatus(status);
+    const onCanPlay = (stream) => {
+      delay = 0;
 
-      if (status === "live") {
-        delay = 0;
-        return;
-      }
+      setStream(stream);
+    };
 
-      if (status === "connecting") return;
+    const onEnded = () => {
+      setStream(null);
 
       connect();
     };
 
-    client.on("stream", setStream);
-    client.on("statusChange", onStatusChange);
+    const onError = (err) => {
+      console.error(err);
+
+      onEnded();
+    };
+
+    client.on("canplay", onCanPlay);
+    client.on("ended", onEnded);
+    client.on("error", onError);
 
     connect();
 
     return () => {
       clearTimeout(timer);
 
-      // Detach before disconnecting, so the "idle" it emits cannot schedule a
-      // reconnect on the way out.
-      client.off("stream", setStream);
-      client.off("statusChange", onStatusChange);
+      client.off("canplay", onCanPlay);
+      client.off("ended", onEnded);
+      client.off("error", onError);
 
       client.disconnect();
     };
   }, []);
 
-  const value = { stream, status };
-
   return (
-    <StreamContext.Provider value={value}>
+    <StreamContext.Provider value={{ stream }}>
       {children}
     </StreamContext.Provider>
   );

@@ -4,11 +4,11 @@ import { usePlaybackGate } from "../context/playbackGateContext";
 import PlayerOverlay from "./PlayerOverlay";
 
 export default function PlayerOverlayDesktop() {
-  const { status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { videoRef } = useVideoRefs();
   const { unlocked, unlock } = usePlaybackGate();
 
-  if (status === "live" && unlocked) return null;
+  if (stream && unlocked) return null;
 
   const startPlayback = () => {
     const video = videoRef.current;

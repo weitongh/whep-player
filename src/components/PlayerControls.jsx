@@ -9,14 +9,14 @@ import FullscreenButton from "./FullscreenButton";
 const HIDE_DELAY = 4000;
 
 export default function PlayerControls() {
-  const { status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { unlocked } = usePlaybackGate();
   const [visible, setVisible] = useState(true);
   const hideTimer = useRef(null);
   // True while the cursor is over the bottom control bar; blocks auto-hide.
   const overControlsRef = useRef(false);
 
-  const hasStream = status === "live";
+  const hasStream = !!stream;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const clearHideTimer = () => {

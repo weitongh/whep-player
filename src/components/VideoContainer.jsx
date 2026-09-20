@@ -4,7 +4,7 @@ import { useVideoRefs } from "../context/videoRefsContext";
 import { usePlaybackGate } from "../context/playbackGateContext";
 
 export default function VideoContainer() {
-  const { stream, status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { videoRef } = useVideoRefs();
   const { unlocked } = usePlaybackGate();
 
@@ -12,7 +12,7 @@ export default function VideoContainer() {
     const video = videoRef.current;
     if (!video) return;
 
-    if (status !== "live") {
+    if (!stream) {
       // The session is over and its stream is stopped, but the element holds on
       // to its last decoded frame. Detach the source to clear that stale frame
       // back to a blank element.
@@ -46,7 +46,7 @@ export default function VideoContainer() {
     return () => {
       video.ontimeupdate = null;
     };
-  }, [status, stream, unlocked, videoRef]);
+  }, [stream, unlocked, videoRef]);
 
   return (
     <div className="absolute inset-0">

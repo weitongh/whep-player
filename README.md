@@ -12,10 +12,10 @@ VITE_WHEP_ENDPOINT_URL=<whep-endpoint-url> npm run dev
 
 ## WHEP client (`src/lib/whep.ts`)
 
-The player core is designed to be a standalone, client-agnostic module: no
-dependencies, no DOM, no framework. It implements the mandatory parts of
+The WHEP client is designed to be a standalone, self-contained module: it has
+no dependencies and never touches the DOM. It implements the mandatory parts of
 [draft-ietf-wish-whep-04](https://www.ietf.org/archive/id/draft-ietf-wish-whep-04.html).
-You can drop it into any client code, for example:
+You can drop it into any codebase, for example:
 
 ```ts
 import { Whep } from "./lib/whep";
@@ -23,13 +23,19 @@ import { Whep } from "./lib/whep";
 const video = document.querySelector("video")!;
 const client = new Whep();
 
-// Attach the listeners before calling client.connect().
-client.on("stream", (stream) => {
+client.on("canplay", (stream) => {
   video.srcObject = stream;
 });
 
-client.on("statusChange", (status) => {
-  console.log(status); // "idle" | "connecting" | "live" | "error"
+// The session ended because streaming has stopped or the connection dropped.
+client.on("ended", () => {
+  video.srcObject = null;
+});
+
+// The session failed due to an error.
+client.on("error", (err) => {
+  video.srcObject = null;
+  console.error(err);
 });
 
 client.connect("<whep-endpoint-url>");

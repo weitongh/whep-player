@@ -4,7 +4,7 @@ import { useVideoRefs } from "../context/videoRefsContext";
 import PlayerOverlay from "./PlayerOverlay";
 
 export default function PlayerOverlayIOS() {
-  const { stream, status } = useStreamContext();
+  const { stream } = useStreamContext();
   const { videoRef } = useVideoRefs();
 
   // Hidden while the video is playing in native fullscreen; otherwise the
@@ -17,11 +17,11 @@ export default function PlayerOverlayIOS() {
   // VideoContainer already pauses the session on its first frame, but it only
   // mutes the element, and iOS needs the track itself silenced as well.
   useEffect(() => {
-    if (status !== "live" || !stream) return;
+    if (!stream) return;
 
     const audio = stream.getAudioTracks()[0] ?? null;
     if (audio) audio.enabled = false;
-  }, [stream, status]);
+  }, [stream]);
 
   // Clear the native-fullscreen audio poll on unmount.
   useEffect(() => {
