@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { StreamContext } from "./streamContext";
 import { Whep } from "../lib/whep";
+import { logger } from "../lib/logger";
 
 const RECONNECT_DELAY = 5000;
 
@@ -29,18 +30,22 @@ export function StreamProvider({ children }) {
       delay = 0;
 
       setStream(stream);
+
+      logger.info("Session connected");
     };
 
     const onEnded = () => {
       setStream(null);
 
       connect();
+
+      logger.info("Session ended");
     };
 
     const onError = (err) => {
-      console.error(err);
-
       onEnded();
+
+      logger.error("Session failed", err);
     };
 
     client.on("canplay", onCanPlay);
